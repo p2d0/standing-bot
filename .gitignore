@@ -5,3 +5,5 @@ tmp/
 /target
 /result
 *.sqlite
+.dir-locals.el
+.env

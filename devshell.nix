@@ -15,6 +15,7 @@ Entered standing_bot app development environment.
     }
   ];
   packages = [
+    sqlite
     pkg-config
     openssl.dev
     libiconv
