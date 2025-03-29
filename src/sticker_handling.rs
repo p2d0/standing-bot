@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use chrono::Utc;
 use teloxide::{
     dispatching::dialogue::GetChatId, prelude::*
 };
 use tokio::sync::watch;
 
-use crate::{periodic_updates::UpdateData, time::get_time_difference, HandlerResult, MyDialogue, State};
+use crate::{periodic_updates::UpdateData, time::{get_seconds_difference, get_time_difference, get_total_string}, total_management::Total, HandlerResult, MyDialogue, State};
 
 pub const STICKER_STAND: &str = "CAACAgIAAyEFAASI1aNsAAIBkGffuc0yHnECp7_WveEQPfDRxiVvAAJRbQACTUiBSuQosFZ33halNgQ";
 const SIT_STICKERS_SET: [&str; 5] =
@@ -15,13 +17,29 @@ const SIT_STICKERS_SET: [&str; 5] =
      "CAACAgIAAyEFAASI1aNsAAICamfjBLPQ93gLqPyAtora_tiKVoP4AAJiYwACErapSkjBxa-bLKFuNgQ" // Laying down
     ];
 
-pub async fn standing_status_handler(bot: Bot, dialogue: MyDialogue, msg: Message, (chat_id, timestamp): (ChatId,i64), tx: watch::Sender<UpdateData>) -> HandlerResult {
+pub async fn standing_status_handler(bot: Bot,
+                                     dialogue: MyDialogue,
+                                     msg: Message,
+                                     (chat_id, timestamp): (ChatId,i64),
+                                     tx: watch::Sender<UpdateData>,
+                                     total_manager: Arc<Total>
+) -> HandlerResult {
     if let Some(sticker) = msg.sticker() {
         if SIT_STICKERS_SET.contains(&sticker.file.id.as_str()) {
             dialogue.exit().await?;
             let _ = tx.send(UpdateData(None, timestamp));
             bot.unpin_chat_message(msg.chat_id().unwrap()).await?;
             bot.send_message(chat_id, format!("ПОСТОЯЛИ {}",get_time_difference(timestamp))).await?;
+            if let Some(total) = total_manager.clone().get_total_today(chat_id).await?
+            {
+                let total_updated = total + get_seconds_difference(timestamp);
+                total_manager.clone().set_total_today(chat_id, total_updated).await?;
+                bot.send_message(chat_id, format!("Всего постояли сегодня: {}", get_total_string(total_updated))).await?;
+            } else {
+                let total = get_seconds_difference(timestamp);
+                total_manager.clone().set_total_today(chat_id, total).await?;
+                bot.send_message(chat_id, format!("Всего постояли сегодня: {}", get_total_string(total))).await?;
+            }
         } else {
             bot.send_message(chat_id, format!("СТОИМ {}",get_time_difference(timestamp))).await?;
         }

@@ -1,13 +1,16 @@
 mod periodic_updates;
+mod total_management;
 mod time;
 mod sticker_handling;
 mod message_handling;
 
 use periodic_updates::update_periodically;
 
+use sqlx::{Error, Pool, SqlitePool};
 use teloxide::{
     dispatching::{dialogue::{self, serializer::Json, ErasedStorage, SqliteStorage, Storage}, MessageFilterExt, UpdateHandler}, prelude::*, types::{ButtonRequest, KeyboardButton, KeyboardButtonRequestChat, KeyboardMarkup, MessageChatShared, MessageKind, RequestId}, update_listeners::webhooks, utils::command::BotCommands
 };
+use total_management::Total;
 
 type MyDialogue = Dialogue<State, ErasedStorage<State>>;
 type MyStorage = std::sync::Arc<ErasedStorage<State>>;
@@ -54,13 +57,15 @@ async fn main() {
     log::info!("Starting bot...");
 
     let bot = Bot::from_env();
+    let path = "dialogues.sqlite";
 
-    let storage: MyStorage = SqliteStorage::open("dialogues.sqlite", Json).await.unwrap().erase();
+    let storage: MyStorage = SqliteStorage::open(path, Json).await.unwrap().erase();
 
+    let total_manager = Total::create_table(path).await.unwrap();
     let tx = update_periodically(bot.clone()).await;
 
     let mut dispatcher = Dispatcher::builder(bot.clone(), schema())
-        .dependencies(dptree::deps![storage,tx])
+        .dependencies(dptree::deps![storage,tx,total_manager])
         .enable_ctrlc_handler()
         .build();
 
