@@ -1,7 +1,7 @@
 mod periodic_updates;
 mod time;
 mod sticker_handling;
-mod private_message_handling;
+mod message_handling;
 
 use periodic_updates::update_periodically;
 
@@ -104,8 +104,8 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
             }
         }).endpoint(chat_shared))
         .branch(case![State::StandingChoice { chat_id }]
-                .endpoint(private_message_handling::standing_choice))
-        .branch(case![State::ReceiveStandingCommand { chat_id , timestamp }].endpoint(private_message_handling::start_standing))
+                .endpoint(message_handling::standing_choice))
+        .branch(case![State::ReceiveStandingCommand { chat_id , timestamp }].endpoint(message_handling::receive_sit_command))
         .branch(dptree::endpoint(invalid_state));
 
     let sticker_handler = Update::filter_channel_post()
@@ -114,7 +114,8 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
         })
         .branch(Message::filter_sticker()
                 .branch(case![State::ReceiveStandingCommand { chat_id , timestamp }].endpoint(sticker_handling::standing_status_handler))
-                .endpoint(sticker_handling::start_standing_handler));
+                .endpoint(sticker_handling::start_standing_handler))
+        .branch(Message::filter_text().branch(case![State::ReceiveStandingCommand { chat_id , timestamp }].endpoint(message_handling::stop_standing)));
 
     dialogue::enter::<Update, ErasedStorage<State>, State, _>()
         .branch(sticker_handler)
