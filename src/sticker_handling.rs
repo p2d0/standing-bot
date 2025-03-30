@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{error::Error, sync::Arc};
 
 use chrono::Utc;
 use teloxide::{
@@ -31,18 +31,22 @@ pub async fn standing_status_handler(bot: Bot,
             bot.unpin_chat_message(msg.chat_id().unwrap()).await?;
             bot.send_message(chat_id, format!("ПОСТОЯЛИ {}",get_time_difference(timestamp))).await?;
 
-            let total = if let Some(existing_total) = total_manager.clone().get_total_today(chat_id).await? {
-                existing_total + get_seconds_difference(timestamp)
-            } else {
-                get_seconds_difference(timestamp)
-            };
-
-            total_manager.set_total_today(chat_id, total).await?;
-            bot.send_message(chat_id, format!("Всего постояли сегодня: {}", get_total_string(total))).await?;
+            send_and_update_total(&bot, chat_id, timestamp, total_manager).await?;
         } else {
             bot.send_message(chat_id, format!("СТОИМ {}",get_time_difference(timestamp))).await?;
         }
     }
+    Ok(())
+}
+
+pub async fn send_and_update_total(bot: &Bot, chat_id: ChatId, timestamp: i64, total_manager: Arc<Total>) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let total = if let Some(existing_total) = total_manager.clone().get_total_today(chat_id).await? {
+        existing_total + get_seconds_difference(timestamp)
+    } else {
+        get_seconds_difference(timestamp)
+    };
+    total_manager.set_total_today(chat_id, total).await?;
+    bot.send_message(chat_id, format!("Всего постояли сегодня: {}", get_total_string(total))).await?;
     Ok(())
 }
 

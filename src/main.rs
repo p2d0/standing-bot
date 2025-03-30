@@ -5,11 +5,14 @@ mod sticker_handling;
 mod message_handling;
 mod openrouter;
 
+use std::ops::Deref;
+
 use periodic_updates::update_periodically;
 
+use serde::Serialize;
 use sqlx::{Error, Pool, SqlitePool};
 use teloxide::{
-    dispatching::{dialogue::{self, serializer::Json, ErasedStorage, SqliteStorage, Storage}, MessageFilterExt, UpdateHandler}, prelude::*, types::{ButtonRequest, KeyboardButton, KeyboardButtonRequestChat, KeyboardMarkup, MessageChatShared, MessageKind, RequestId}, update_listeners::webhooks, utils::command::BotCommands
+    dispatching::{dialogue::{self, serializer::Json, ErasedStorage, SqliteStorage, Storage}, MessageFilterExt, UpdateHandler}, prelude::*, types::{ButtonRequest, ChatMemberStatus, KeyboardButton, KeyboardButtonRequestChat, KeyboardMarkup, MessageChatShared, MessageKind, RequestId}, update_listeners::webhooks, utils::command::BotCommands
 };
 use total_management::Total;
 
@@ -114,19 +117,36 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
         .branch(case![State::ReceiveStandingCommand { chat_id , timestamp }].endpoint(message_handling::receive_sit_command))
         .branch(dptree::endpoint(invalid_state));
 
-    let sticker_handler = Update::filter_channel_post()
+    let channel_handler = Update::filter_channel_post()
         .inspect(|u: Update| {
             log::info!("{u:#?}");
         })
-        .branch(Message::filter_sticker()
+        .filter_async(is_admin)
+        .branch(
+            Message::filter_sticker()
                 .branch(case![State::ReceiveStandingCommand { chat_id , timestamp }].endpoint(sticker_handling::standing_status_handler))
                 .endpoint(sticker_handling::start_standing_handler))
         .branch(Message::filter_text().branch(case![State::ReceiveStandingCommand { chat_id , timestamp }].endpoint(message_handling::stop_standing)));
 
     dialogue::enter::<Update, ErasedStorage<State>, State, _>()
-        .branch(sticker_handler)
+        .branch(channel_handler)
         .branch(message_handler)
 }
+
+async fn is_admin(bot: Bot, msg: Message) -> bool {
+    if let Some(user) = msg.from {
+        let chat_id = msg.chat.id;
+        let user_id = user.id;
+
+        match bot.get_chat_member(chat_id, user_id).await {
+            Ok(member) => matches!(member.status(), ChatMemberStatus::Administrator | ChatMemberStatus::Owner),
+            Err(_) => false,
+        }
+    } else {
+        false
+    }
+}
+
 
 async fn start(bot: Bot, msg: Message) -> HandlerResult {
     bot.send_message(msg.chat.id, "Скинь чат бро")

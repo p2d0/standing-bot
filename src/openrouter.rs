@@ -10,7 +10,7 @@ pub async fn is_intent_to_sit(message: &str) -> Result<bool, Box<dyn Error>> {
 
     let client = reqwest::Client::new();
 
-    let base_prompt = "Analyze the message if the intent of the message means to sit/relax and not stand/standing up only reply with 1 else 0: ";
+    let base_prompt = "Analyze the message if the intent of the message means to sit/relax and not stand/standing up and not any other intent only reply with 1 else 0: ";
     let full_prompt = format!("{}{}", base_prompt, message);
 
     let response = client
@@ -30,7 +30,6 @@ pub async fn is_intent_to_sit(message: &str) -> Result<bool, Box<dyn Error>> {
         .await?;
 
     let response_text: Value = response.json().await?;
-    println!("{:?}", response_text);
     let result = response_text["choices"][0]["message"]["content"]
         .as_str()
         .unwrap().trim() == "1";
