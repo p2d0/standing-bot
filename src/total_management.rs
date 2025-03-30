@@ -15,16 +15,17 @@ impl Total {
         sqlx::query(
             "
 CREATE TABLE IF NOT EXISTS total (
-    chat_id BIGINT PRIMARY KEY,
+    chat_id BIGINT,
     date TEXT,
-    total_seconds INT
+    total_seconds INT,
+    CONSTRAINT id_date UNIQUE(chat_id, date)
 );
         ").execute(&pool)
             .await?;
         return Ok(Arc::new(Self {pool}));
     }
 
-    pub async fn set_total_today(self: Arc<Self>,ChatId(chat_id):ChatId,total_seconds: i64) -> Result<(),Error>
+    pub async fn set_total_today(self: &Self,ChatId(chat_id):ChatId,total_seconds: i64) -> Result<(),Error>
     {
             self.pool
                 .acquire()
@@ -33,7 +34,7 @@ CREATE TABLE IF NOT EXISTS total (
                     sqlx::query(
                         "
             INSERT INTO total VALUES (?, date('now'), ?)
-            ON CONFLICT(chat_id) DO UPDATE SET total_seconds=excluded.total_seconds
+            ON CONFLICT(chat_id,date) DO UPDATE SET total_seconds=excluded.total_seconds + total.total_seconds
                                 ",
                     )
                         .bind(chat_id)
@@ -43,7 +44,7 @@ CREATE TABLE IF NOT EXISTS total (
             Ok(())
     }
 
-    pub async fn get_total_today(self: Arc<Self>, ChatId(chat_id):ChatId) -> Result<Option<i64>,Error>
+    pub async fn get_total_today(self: &Self, ChatId(chat_id):ChatId) -> Result<Option<i64>,Error>
     {
         #[derive(sqlx::FromRow)]
         struct TotalSecondsDbRow {
@@ -60,4 +61,28 @@ CREATE TABLE IF NOT EXISTS total (
         Ok(bytes)
     }
 
+}
+
+#[cfg(test)]
+mod test_management {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_creating() {
+        let total = Total::create_table(":memory:").await.unwrap();
+        total.clone().set_total_today(ChatId(1), 100).await.unwrap();
+        assert_eq!(total.clone().get_total_today(ChatId(1)).await.unwrap().unwrap(), 100);
+    }
+
+    #[tokio::test]
+    async fn test_adding_yesterdays_dates() {
+        let total = Total::create_table(":memory:").await.unwrap();
+        sqlx::query("INSERT INTO total VALUES (1, date('now', '-5 day'), 100)")
+            .execute(&total.pool)
+            .await
+            .unwrap();
+        assert_eq!(total.clone().get_total_today(ChatId(1)).await.unwrap(), None);
+        total.clone().set_total_today(ChatId(1), 200).await.unwrap();
+        assert_eq!(total.clone().get_total_today(ChatId(1)).await.unwrap().unwrap(), 200);
+    }
 }

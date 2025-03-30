@@ -65,7 +65,7 @@ async fn main() {
     let tx = update_periodically(bot.clone()).await;
 
     let mut dispatcher = Dispatcher::builder(bot.clone(), schema())
-        .dependencies(dptree::deps![storage,tx,total_manager])
+        .dependencies(dptree::deps![storage,tx,total_manager.clone()])
         .enable_ctrlc_handler()
         .build();
 
