@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS total (
                     sqlx::query(
                         "
             INSERT INTO total VALUES (?, date('now'), ?)
-            ON CONFLICT(chat_id,date) DO UPDATE SET total_seconds=excluded.total_seconds + total.total_seconds
+            ON CONFLICT(chat_id,date) DO UPDATE SET total_seconds=excluded.total_seconds
                                 ",
                     )
                         .bind(chat_id)

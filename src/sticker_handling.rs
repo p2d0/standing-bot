@@ -30,16 +30,15 @@ pub async fn standing_status_handler(bot: Bot,
             let _ = tx.send(UpdateData(None, timestamp));
             bot.unpin_chat_message(msg.chat_id().unwrap()).await?;
             bot.send_message(chat_id, format!("ПОСТОЯЛИ {}",get_time_difference(timestamp))).await?;
-            if let Some(total) = total_manager.clone().get_total_today(chat_id).await?
-            {
-                let total_updated = total + get_seconds_difference(timestamp);
-                total_manager.set_total_today(chat_id, total_updated).await?;
-                bot.send_message(chat_id, format!("Всего постояли сегодня: {}", get_total_string(total_updated))).await?;
+
+            let total = if let Some(existing_total) = total_manager.clone().get_total_today(chat_id).await? {
+                existing_total + get_seconds_difference(timestamp)
             } else {
-                let total = get_seconds_difference(timestamp);
-                total_manager.set_total_today(chat_id, total).await?;
-                bot.send_message(chat_id, format!("Всего постояли сегодня: {}", get_total_string(total))).await?;
-            }
+                get_seconds_difference(timestamp)
+            };
+
+            total_manager.set_total_today(chat_id, total).await?;
+            bot.send_message(chat_id, format!("Всего постояли сегодня: {}", get_total_string(total))).await?;
         } else {
             bot.send_message(chat_id, format!("СТОИМ {}",get_time_difference(timestamp))).await?;
         }
