@@ -3,6 +3,7 @@ mod total_management;
 mod time;
 mod sticker_handling;
 mod message_handling;
+mod openrouter;
 
 use periodic_updates::update_periodically;
 

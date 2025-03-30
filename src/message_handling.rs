@@ -6,7 +6,7 @@ use teloxide::{
 };
 use tokio::{sync::{watch, Mutex}, time::{sleep,Duration}};
 
-use crate::{periodic_updates::UpdateData, sticker_handling::STICKER_STAND, time::get_time_difference, HandlerResult, MyDialogue, State};
+use crate::{openrouter, periodic_updates::UpdateData, sticker_handling::STICKER_STAND, time::get_time_difference, HandlerResult, MyDialogue, State};
 
 pub async fn standing_choice(bot: Bot, dialogue: MyDialogue, msg: Message, chat_id: ChatId, tx: watch::Sender<UpdateData>) -> HandlerResult {
     match msg.text().map(ToOwned::to_owned) {
@@ -50,7 +50,7 @@ pub async fn receive_sit_command(bot: Bot, dialogue: MyDialogue, msg: Message, (
 
 pub async fn stop_standing(bot: Bot, dialogue: MyDialogue, msg: Message, (chat_id, timestamp): (ChatId,i64), tx: watch::Sender<UpdateData>) -> HandlerResult {
     if let Some(text) = msg.text().map(ToOwned::to_owned) {
-        if text.to_lowercase() == "чил" {
+        if openrouter::is_intent_to_sit(&text).await.unwrap() {
             dialogue.exit().await?;
             // NOTE Duplication
             let _ = tx.send(UpdateData(None, timestamp));
