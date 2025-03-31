@@ -121,7 +121,6 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
         .inspect(|u: Update| {
             log::info!("{u:#?}");
         })
-        .filter_async(is_admin)
         .branch(
             Message::filter_sticker()
                 .branch(case![State::ReceiveStandingCommand { chat_id , timestamp }].endpoint(sticker_handling::standing_status_handler))
@@ -133,19 +132,6 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
         .branch(message_handler)
 }
 
-async fn is_admin(bot: Bot, msg: Message) -> bool {
-    if let Some(user) = msg.from {
-        let chat_id = msg.chat.id;
-        let user_id = user.id;
-
-        match bot.get_chat_member(chat_id, user_id).await {
-            Ok(member) => matches!(member.status(), ChatMemberStatus::Administrator | ChatMemberStatus::Owner),
-            Err(_) => false,
-        }
-    } else {
-        false
-    }
-}
 
 
 async fn start(bot: Bot, msg: Message) -> HandlerResult {
