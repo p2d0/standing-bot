@@ -12,7 +12,7 @@ pub fn get_time_difference(timestamp: i64) -> String {
     }
 }
 
-pub fn get_total_string(total: i64) -> String {
+pub fn total_seconds_to_hms(total: i64) -> String {
     let hours = total / 3600;
     let minutes = (total % 3600) / 60;
     let seconds = total % 60;

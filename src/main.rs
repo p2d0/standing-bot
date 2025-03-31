@@ -5,7 +5,7 @@ mod sticker_handling;
 mod message_handling;
 mod openrouter;
 
-use std::ops::Deref;
+use std::{ops::Deref, sync::Arc};
 
 use periodic_updates::update_periodically;
 
@@ -53,6 +53,7 @@ enum Command {
     Start,
     /// Cancel the purchase procedure.
     Cancel,
+    Rankings
 }
 
 #[tokio::main]
@@ -98,6 +99,7 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
 
     let command_handler = teloxide::filter_command::<Command, _>()
         .branch(case![Command::Help].endpoint(help))
+        .branch(case![Command::Rankings].endpoint(rankings))
         .branch(case![Command::Start].endpoint(start))
         .branch(case![Command::Cancel].endpoint(cancel));
 
@@ -105,7 +107,7 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
         .inspect(|u: Update| {
             log::info!("{u:#?}");
         })
-        .branch(command_handler)
+        .branch(command_handler.clone())
         .branch(dptree::filter_map(|message: Message| {
             match message.kind {
                 MessageKind::ChatShared(x) => Some(x),
@@ -118,11 +120,12 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
         .branch(dptree::endpoint(invalid_state));
 
     let channel_handler = Update::filter_channel_post()
-        .inspect(|u: Update| {
-            log::info!("{u:#?}");
-        })
+        .branch(command_handler.clone())
         .branch(
             Message::filter_sticker()
+                .inspect(|u: Message| {
+                    log::info!("{}",u.sticker().unwrap().file.unique_id);
+                })
                 .branch(case![State::ReceiveStandingCommand { chat_id , timestamp }].endpoint(sticker_handling::standing_status_handler))
                 .endpoint(sticker_handling::start_standing_handler))
         .branch(Message::filter_text().branch(case![State::ReceiveStandingCommand { chat_id , timestamp }].endpoint(message_handling::stop_standing)));
@@ -133,6 +136,40 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
 }
 
 
+async fn rankings(bot: Bot, msg: Message, total_manager: Arc<Total>) -> HandlerResult {
+    let averages = total_manager.get_average_total_per_day_by_chat().await?;
+    let mut messages = Vec::new();
+
+    let mut winning_chat: Option<(i64, i64)> = None;
+
+    for (chat_id, average) in averages.iter() {
+        let chat = bot.get_chat(ChatId(*chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        let average_seconds = average.unwrap_or(0) as i64;
+        messages.push(format!("Чат: {}, Среднее стояние: \n<b>{}</b>", chat_name, time::total_seconds_to_hms(average_seconds)));
+
+        if let Some((_, current_winning_average)) = winning_chat {
+            if average_seconds > current_winning_average {
+                winning_chat = Some((*chat_id, average_seconds));
+            }
+        } else {
+            winning_chat = Some((*chat_id, average_seconds));
+        }
+    }
+
+    if let Some((chat_id, average)) = winning_chat {
+        let chat = bot.get_chat(ChatId(chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        messages.push(format!("
+🏆 <b>Победитель:</b> {} со средним стоянием: <b>{}</b> 🏆", chat_name, time::total_seconds_to_hms(average)));
+    }
+
+    bot.send_message(msg.chat.id, messages.join("\n"))
+       .parse_mode(teloxide::types::ParseMode::Html)
+       .await?;
+
+    Ok(())
+}
 
 async fn start(bot: Bot, msg: Message) -> HandlerResult {
     bot.send_message(msg.chat.id, "Скинь чат бро")
