@@ -19,8 +19,12 @@ pub fn total_seconds_to_hms(total: i64) -> String {
     return format!("{hours} часов {minutes} минут {seconds} секунд");
 }
 
-pub fn get_seconds_difference(timestamp: i64) -> i64 {
-    let now = Utc::now();
+
+pub fn get_seconds_difference_from_now(timestamp: i64) -> i64 {
+    get_seconds_difference(timestamp,Utc::now())
+}
+
+pub fn get_seconds_difference(timestamp: i64,now:DateTime<Utc>) -> i64 {
     if let Some(past) = DateTime::from_timestamp(timestamp,0) {
         let difference = now.signed_duration_since(past);
         return difference.num_seconds();

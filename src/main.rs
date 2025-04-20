@@ -11,6 +11,7 @@ use periodic_updates::update_periodically;
 
 use serde::Serialize;
 use sqlx::{Error, Pool, SqlitePool};
+use sticker_handling::{get_total, send_and_update_total};
 use teloxide::{
     dispatching::{dialogue::{self, serializer::Json, ErasedStorage, SqliteStorage, Storage}, MessageFilterExt, UpdateHandler}, prelude::*, types::{ButtonRequest, ChatMemberStatus, KeyboardButton, KeyboardButtonRequestChat, KeyboardMarkup, MessageChatShared, MessageKind, RequestId}, update_listeners::webhooks, utils::command::BotCommands
 };
@@ -43,16 +44,17 @@ pub enum State {
     },
 }
 
-/// These commands are supported:
+/// КОМАНДЫ:
 #[derive(BotCommands, Clone)]
 #[command(rename_rule = "lowercase")]
 enum Command {
-    /// Display this text.
+    /// ХЕЛП
     Help,
-    /// Start the purchase procedure.
+    /// СТАРТУЕМ
     Start,
-    /// Cancel the purchase procedure.
-    Cancel,
+    /// [минуты] ОТМЕНИТЬ СТОЯНИЕ
+    Cancel(String),
+    /// РАНКИНГ
     Rankings
 }
 
@@ -101,7 +103,7 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
         .branch(case![Command::Help].endpoint(help))
         .branch(case![Command::Rankings].endpoint(rankings))
         .branch(case![Command::Start].endpoint(start))
-        .branch(case![Command::Cancel].endpoint(cancel));
+        .branch(case![Command::Cancel(time)].endpoint(cancel));
 
     let message_handler = Update::filter_message()
         .inspect(|u: Update| {
@@ -197,8 +199,33 @@ async fn chat_shared(bot: Bot, msg: Message, dialogue: MyDialogue, chat: Message
 }
 
 
-async fn cancel(bot: Bot, dialogue: MyDialogue, msg: Message) -> HandlerResult {
-    bot.send_message(msg.chat.id, "Cancelling the dialogue.").await?;
+async fn cancel(
+    bot: Bot,
+    dialogue: MyDialogue,
+    msg: Message,
+    cmd: Command,
+    total_manager: Arc<Total>
+) -> HandlerResult {
+    if let Some(State::ReceiveStandingCommand { chat_id, timestamp: _ }) = dialogue.get().await? {
+        if let Command::Cancel(minutes_str) = cmd {
+            let mut total = total_manager.clone().get_total_today(chat_id).await?.unwrap_or(0);
+
+            total += minutes_str.parse::<i64>().unwrap_or(0) * 60;
+
+            dialogue.exit().await?;
+            send_and_update_total(&bot, chat_id, total, total_manager).await?;
+            bot.send_message(msg.chat.id, "Отменили стояние.").await?;
+
+            // Unpin any standing message
+            if let Err(e) = bot.unpin_chat_message(chat_id).await {
+                log::warn!("Failed to unpin message: {:?}", e);
+            }
+
+        }
+    } else {
+        bot.send_message(msg.chat.id, "Нет активного стояния для отмены.").await?;
+    }
+
     dialogue.exit().await?;
     Ok(())
 }

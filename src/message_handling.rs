@@ -6,7 +6,7 @@ use teloxide::{
 };
 use tokio::{sync::{watch, Mutex}, time::{sleep,Duration}};
 
-use crate::{openrouter, periodic_updates::UpdateData, sticker_handling::{send_and_update_total, STICKER_STAND}, time::get_time_difference, total_management::{self, Total}, HandlerResult, MyDialogue, State};
+use crate::{openrouter, periodic_updates::UpdateData, sticker_handling::{get_total, send_and_update_total, STICKER_STAND}, time::get_time_difference, total_management::{self, Total}, HandlerResult, MyDialogue, State};
 
 pub async fn standing_choice(bot: Bot, dialogue: MyDialogue, msg: Message, chat_id: ChatId, tx: watch::Sender<UpdateData>) -> HandlerResult {
     match msg.text().map(ToOwned::to_owned) {
@@ -43,7 +43,8 @@ pub async fn receive_sit_command(bot: Bot, dialogue: MyDialogue, msg: Message, (
                    KeyboardButton::new("СТОИМ БРАТЬЯ"),
                ]]))
                .await?;
-            send_and_update_total(&bot, chat_id, timestamp,total_manager).await?;
+            let total = get_total(total_manager.clone(), chat_id, timestamp).await;
+            send_and_update_total(&bot, chat_id, total,total_manager).await?;
         }
     }
     Ok(())
@@ -57,7 +58,8 @@ pub async fn stop_standing(bot: Bot, dialogue: MyDialogue, msg: Message, (chat_i
             let _ = tx.send(UpdateData(None, timestamp));
             bot.unpin_chat_message(msg.chat_id().unwrap()).await?;
             bot.send_message(chat_id, format!("ПОСТОЯЛИ {}",get_time_difference(timestamp))).await?;
-            send_and_update_total(&bot, chat_id, timestamp,total_manager).await?;
+            let total = get_total(total_manager.clone(), chat_id, timestamp).await;
+            send_and_update_total(&bot, chat_id, total, total_manager).await?;
         }
     }
     Ok(())

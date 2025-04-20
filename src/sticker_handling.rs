@@ -6,7 +6,7 @@ use teloxide::{
 };
 use tokio::sync::watch;
 
-use crate::{periodic_updates::UpdateData, time::{get_seconds_difference, get_time_difference, total_seconds_to_hms}, total_management::Total, HandlerResult, MyDialogue, State};
+use crate::{periodic_updates::UpdateData, time::{get_seconds_difference, get_seconds_difference_from_now, get_time_difference, total_seconds_to_hms}, total_management::Total, HandlerResult, MyDialogue, State};
 
 pub const STICKER_STAND: &str = "AgADUW0AAk1IgUo";
 const SIT_STICKERS_SET: [&str; 5] =
@@ -31,7 +31,9 @@ pub async fn standing_status_handler(bot: Bot,
             bot.unpin_chat_message(msg.chat_id().unwrap()).await?;
             bot.send_message(chat_id, format!("ПОСТОЯЛИ {}",get_time_difference(timestamp))).await?;
 
-            send_and_update_total(&bot, chat_id, timestamp, total_manager).await?;
+            let total = get_total(total_manager.clone(), chat_id, timestamp).await;
+            send_and_update_total(&bot, chat_id, total, total_manager).await?;
+
         } else {
             bot.send_message(chat_id, format!("СТОИМ {}",get_time_difference(timestamp))).await?;
         }
@@ -39,12 +41,16 @@ pub async fn standing_status_handler(bot: Bot,
     Ok(())
 }
 
-pub async fn send_and_update_total(bot: &Bot, chat_id: ChatId, timestamp: i64, total_manager: Arc<Total>) -> Result<(), Box<dyn Error + Send + Sync>> {
-    let total = if let Some(existing_total) = total_manager.clone().get_total_today(chat_id).await? {
-        existing_total + get_seconds_difference(timestamp)
+pub async fn get_total(total_manager: Arc<Total>,chat_id: ChatId,timestamp: i64) -> i64 {
+    let total = if let Ok(Some(existing_total)) = total_manager.clone().get_total_today(chat_id).await {
+        existing_total + get_seconds_difference_from_now(timestamp)
     } else {
-        get_seconds_difference(timestamp)
+         get_seconds_difference_from_now(timestamp)
     };
+    return total;
+}
+
+pub async fn send_and_update_total(bot: &Bot, chat_id: ChatId, total: i64, total_manager: Arc<Total>) -> Result<(), Box<dyn Error + Send + Sync>> {
     total_manager.set_total_today(chat_id, total).await?;
     bot.send_message(chat_id, format!("Всего постояли сегодня: {}", total_seconds_to_hms(total))).await?;
     Ok(())

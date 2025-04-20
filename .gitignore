@@ -7,3 +7,4 @@ tmp/
 *.sqlite
 .dir-locals.el
 .env
+.aider*

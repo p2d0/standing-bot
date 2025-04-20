@@ -10,7 +10,14 @@ pub async fn is_intent_to_sit(message: &str) -> Result<bool, Box<dyn Error>> {
 
     let client = reqwest::Client::new();
 
-    let base_prompt = "Analyze the message if the intent of the message means to sit/relax and not stand/standing up and not any other intent only reply with 1 else 0: ";
+    let base_prompt = "Analyze the message if the intent of the message to sit/relax in present moment not in the future or the past and not stand/standing up and not any other intent only reply with 1 else 0.
+Only reply with 1 if you're sure
+Examples:
+ну ща не надолго, лежать пойду уже - 0
+Чилим - 1
+Чил - 1
+Message:
+ ";
     let full_prompt = format!("{}{}", base_prompt, message);
 
     let response = client
@@ -52,11 +59,18 @@ mod tests {
     async fn test_sit_intent() {
         setup();
 
-        let result = is_intent_to_sit("Чил")
+        let result = is_intent_to_sit("Чилим")
             .await
             .expect("Function should not error");
 
-        assert_eq!(result, true, "Should return true for sit intent");
+        assert_eq!(result, true, "Should return true for Чил");
+
+        let result = is_intent_to_sit("ну ща не надолго, лежать пойду уже")
+            .await
+            .expect("Function should not error");
+
+        assert_eq!(result, false, "Should return true for sit intent");
+
     }
 
     #[tokio::test]
