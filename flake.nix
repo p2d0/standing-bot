@@ -1,4 +1,13 @@
 {
+  nixConfig = {
+    extra-substituters = [
+      "https://upgradegamma.cachix.org"
+    ];
+    extra-trusted-public-keys = [
+      "upgradegamma.cachix.org-1:iIifduPUNZ9OrRYgaEcKTeRQxbqr2/FbiF1bboND05A="
+    ];
+  };
+
   description = "standing_bot";
 
   inputs = {
