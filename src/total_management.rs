@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS total (
     }
 
     pub async fn get_average_total_per_day_by_chat(self: &Self) -> Result<Vec<(i64, Option<i64>)>, Error> {
-        let rows = sqlx::query("SELECT chat_id, AVG(total_seconds) FROM total WHERE total_seconds > 100 GROUP BY chat_id")
+        let rows = sqlx::query("SELECT chat_id, AVG(total_seconds) FROM total GROUP BY chat_id")
             .fetch_all(&self.pool)
             .await?;
 
