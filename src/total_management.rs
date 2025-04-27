@@ -59,16 +59,16 @@ CREATE TABLE IF NOT EXISTS total (
         Ok(result)
     }
 
-    pub async fn get_total_today(self: &Self, ChatId(chat_id):ChatId) -> Result<Option<i64>,Error>
-    {
+    pub async fn get_total_timestamp_day(&self, timestamp: i64, ChatId(chat_id): ChatId) -> Result<Option<i64>, Error> {
         #[derive(sqlx::FromRow)]
         struct TotalSecondsDbRow {
             total_seconds: i64,
         }
         let bytes = sqlx::query_as::<_, TotalSecondsDbRow>(
-            "SELECT total_seconds FROM total WHERE chat_id = ? and date = date('now')"
+            "SELECT total_seconds FROM total WHERE chat_id = ? and date = date(?, 'unixepoch')"
         )
             .bind(chat_id)
+            .bind(timestamp)
             .fetch_optional(&self.pool)
             .await?
             .map(|r| r.total_seconds);
@@ -80,13 +80,16 @@ CREATE TABLE IF NOT EXISTS total (
 
 #[cfg(test)]
 mod test_management {
+    use chrono::Utc;
+
     use super::*;
 
     #[tokio::test]
     async fn test_creating() {
         let total = Total::create_table(":memory:").await.unwrap();
         total.clone().set_total_today(ChatId(1), 100).await.unwrap();
-        assert_eq!(total.clone().get_total_today(ChatId(1)).await.unwrap().unwrap(), 100);
+
+        assert_eq!(total.clone().get_total_timestamp_day(Utc::now().timestamp(),ChatId(1)).await.unwrap().unwrap(), 100);
     }
 
     #[tokio::test]
@@ -96,9 +99,20 @@ mod test_management {
             .execute(&total.pool)
             .await
             .unwrap();
-        assert_eq!(total.clone().get_total_today(ChatId(1)).await.unwrap(), None);
+        assert_eq!(total.clone().get_total_timestamp_day(Utc::now().timestamp(),ChatId(1)).await.unwrap(), None);
         total.clone().set_total_today(ChatId(1), 200).await.unwrap();
-        assert_eq!(total.clone().get_total_today(ChatId(1)).await.unwrap().unwrap(), 200);
+        assert_eq!(total.clone().get_total_timestamp_day(Utc::now().timestamp(),ChatId(1)).await.unwrap().unwrap(), 200);
+    }
+
+    #[tokio::test]
+    async fn test_total_yesterdays_dates() {
+        let total = Total::create_table(":memory:").await.unwrap();
+        sqlx::query("INSERT INTO total VALUES (1, date('now', '-5 day'), 100)")
+            .execute(&total.pool)
+            .await
+            .unwrap();
+        let five_days_ago = Utc::now() - chrono::Duration::days(5);
+        assert_eq!(total.clone().get_total_timestamp_day(five_days_ago.timestamp(), ChatId(1)).await.unwrap(), Some(100));
     }
 
     #[tokio::test]

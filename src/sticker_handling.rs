@@ -42,7 +42,7 @@ pub async fn standing_status_handler(bot: Bot,
 }
 
 pub async fn get_total(total_manager: Arc<Total>,chat_id: ChatId,timestamp: i64) -> i64 {
-    let total = if let Ok(Some(existing_total)) = total_manager.clone().get_total_today(chat_id).await {
+    let total = if let Ok(Some(existing_total)) = total_manager.clone().get_total_timestamp_day(timestamp,chat_id).await {
         existing_total + get_seconds_difference_from_now(timestamp)
     } else {
          get_seconds_difference_from_now(timestamp)

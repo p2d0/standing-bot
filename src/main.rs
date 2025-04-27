@@ -206,9 +206,9 @@ async fn cancel(
     cmd: Command,
     total_manager: Arc<Total>
 ) -> HandlerResult {
-    if let Some(State::ReceiveStandingCommand { chat_id, timestamp: _ }) = dialogue.get().await? {
+    if let Some(State::ReceiveStandingCommand { chat_id, timestamp }) = dialogue.get().await? {
         if let Command::Cancel(minutes_str) = cmd {
-            let mut total = total_manager.clone().get_total_today(chat_id).await?.unwrap_or(0);
+            let mut total = total_manager.clone().get_total_timestamp_day(timestamp,chat_id).await?.unwrap_or(0);
 
             total += minutes_str.parse::<i64>().unwrap_or(0) * 60;
 
