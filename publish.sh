@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-nix build --no-link --print-out-paths .#armv7-gnu | cachix push upgradegamma
+nix build --print-out-paths .#armv7-gnu | cachix push upgradegamma
 
 ssh root@192.168.1.153 pkill standing
 

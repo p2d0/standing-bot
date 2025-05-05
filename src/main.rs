@@ -55,7 +55,9 @@ enum Command {
     /// [минуты] ОТМЕНИТЬ СТОЯНИЕ
     Cancel(String),
     /// РАНКИНГ
-    Rankings
+    Rankings,
+    /// ОБЩЕЕ ВРЕМЯ
+    Total
 }
 
 #[tokio::main]
@@ -81,7 +83,8 @@ async fn main() {
     {
         let port = 9999;
         let addr = ([0, 0, 0, 0], port).into();
-        let link = "https://bots.upgradegamma.ru/standing_bot";
+        let link = "https://ug.kyrgyzstan.kg/standing_bot";
+
 
         let listener = webhooks::axum(bot.clone(),webhooks::Options::new(addr,link.parse().unwrap())).await.expect("Failed to start webhook listener");
         let error_handler =
@@ -103,7 +106,8 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
         .branch(case![Command::Help].endpoint(help))
         .branch(case![Command::Rankings].endpoint(rankings))
         .branch(case![Command::Start].endpoint(start))
-        .branch(case![Command::Cancel(time)].endpoint(cancel));
+        .branch(case![Command::Cancel(time)].endpoint(cancel))
+        .branch(case![Command::Total].endpoint(total));
 
     let message_handler = Update::filter_message()
         .inspect(|u: Update| {
@@ -164,6 +168,41 @@ async fn rankings(bot: Bot, msg: Message, total_manager: Arc<Total>) -> HandlerR
         let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
         messages.push(format!("
 🏆 <b>Победитель:</b> {} со средним стоянием: <b>{}</b> 🏆", chat_name, time::total_seconds_to_hms(average)));
+    }
+
+    bot.send_message(msg.chat.id, messages.join("\n"))
+       .parse_mode(teloxide::types::ParseMode::Html)
+       .await?;
+
+    Ok(())
+}
+
+async fn total(bot: Bot, msg: Message, total_manager: Arc<Total>) -> HandlerResult {
+    let totals = total_manager.get_total_seconds_grouped_by_chat().await?;
+    let mut messages = Vec::new();
+
+    let mut winning_chat: Option<(i64, i64)> = None;
+
+    for (chat_id, total) in totals.iter() {
+        let chat = bot.get_chat(ChatId(*chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        let total_seconds = total.unwrap_or(0) as i64;
+        messages.push(format!("Чат: {}, Всего постояли: \n<b>{}</b>", chat_name, time::total_seconds_to_hms(total_seconds)));
+
+        if let Some((_, current_winning_total)) = winning_chat {
+            if total_seconds > current_winning_total {
+                winning_chat = Some((*chat_id, total_seconds));
+            }
+        } else {
+            winning_chat = Some((*chat_id, total_seconds));
+        }
+    }
+
+    if let Some((chat_id, total)) = winning_chat {
+        let chat = bot.get_chat(ChatId(chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        messages.push(format!("
+🏆 <b>Победитель:</b> {} с общим стоянием: <b>{}</b> 🏆", chat_name, time::total_seconds_to_hms(total)));
     }
 
     bot.send_message(msg.chat.id, messages.join("\n"))

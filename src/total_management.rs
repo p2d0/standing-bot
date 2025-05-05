@@ -59,6 +59,21 @@ CREATE TABLE IF NOT EXISTS total (
         Ok(result)
     }
 
+    pub async fn get_total_seconds_grouped_by_chat(self: &Self) -> Result<Vec<(i64, Option<i64>)>, Error> {
+        let rows = sqlx::query("SELECT chat_id, SUM(total_seconds) FROM total GROUP BY chat_id")
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut result = Vec::new();
+        for row in rows {
+            let chat_id: i64 = row.try_get(0)?;
+            let avg_total_seconds: Option<i64> = row.try_get(1)?;
+            result.push((chat_id, avg_total_seconds.map(|x| x as i64)));
+        }
+
+        Ok(result)
+    }
+
     pub async fn get_total_timestamp_day(&self, timestamp: i64, ChatId(chat_id): ChatId) -> Result<Option<i64>, Error> {
         #[derive(sqlx::FromRow)]
         struct TotalSecondsDbRow {
@@ -139,6 +154,32 @@ mod test_management {
         assert_eq!(averages[0].1, Some(200));
         assert_eq!(averages[1].0, 2);
         assert_eq!(averages[1].1, Some(250));
+    }
+
+    #[tokio::test]
+    async fn test_total() {
+        let total = Total::create_table(":memory:").await.unwrap();
+        total.clone().set_total_today(ChatId(1), 100).await.unwrap();
+        total.clone().set_total_today(ChatId(1), 200).await.unwrap();
+        total.clone().set_total_today(ChatId(2), 300).await.unwrap();
+
+        sqlx::query("INSERT INTO total VALUES (2, date('now', '-1 day'), 100)")
+            .execute(&total.pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO total VALUES (2, date('now', '-2 day'), 200)")
+            .execute(&total.pool)
+            .await
+            .unwrap();
+
+        let totals = total.get_total_seconds_grouped_by_chat().await.unwrap();
+
+        assert_eq!(totals.len(), 2);
+        assert_eq!(totals[0].0, 1);
+        assert_eq!(totals[0].1, Some(200));
+        assert_eq!(totals[1].0, 2);
+        assert_eq!(totals[1].1, Some(600));
     }
 
 }
