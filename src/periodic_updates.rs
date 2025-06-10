@@ -6,7 +6,7 @@ use teloxide::{
 };
 use tokio::{sync::{watch, Mutex}, time::{sleep,Duration}};
 
-use crate::time::get_time_difference;
+use crate::time::{get_time_difference, get_time_difference_from_now};
 
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct UpdateData(pub Option<Message>, pub i64);
@@ -16,7 +16,7 @@ pub async fn periodic_update_msg(bot: Bot, rx: Arc<watch::Receiver<UpdateData>>)
         let UpdateData(message, timestamp) = rx.borrow().clone();
         if let Some(message) = message {
             log::info!("Updating message {:#?}", message);
-            let edited_message = format!("Стоим {}", get_time_difference(timestamp));
+            let edited_message = format!("Стоим {}", get_time_difference_from_now(timestamp));
             if let Err(err) = bot.edit_message_text(message.chat_id().unwrap(),message.id,edited_message).await {
                 log::warn!("Failed to update message: {:?}", err);
             };

@@ -6,7 +6,7 @@ use teloxide::{
 };
 use tokio::sync::watch;
 
-use crate::{periodic_updates::UpdateData, time::{get_seconds_difference, get_seconds_difference_from_now, get_time_difference, total_seconds_to_hms}, total_management::Total, HandlerResult, MyDialogue, State};
+use crate::{periodic_updates::UpdateData, time::{get_seconds_difference, get_seconds_difference_from_now, get_time_difference, get_time_difference_from_now, total_seconds_to_hms}, total_management::Total, HandlerResult, MyDialogue, State};
 
 pub const STICKER_STAND: &str = "AgADUW0AAk1IgUo";
 const SIT_STICKERS_SET: [&str; 5] =
@@ -29,14 +29,14 @@ pub async fn standing_status_handler(bot: Bot,
             dialogue.exit().await?;
             let _ = tx.send(UpdateData(None, timestamp));
             bot.unpin_chat_message(msg.chat_id().unwrap()).await?;
-            bot.send_message(chat_id, format!("ПОСТОЯЛИ {}",get_time_difference(timestamp))).await?;
-
             let end_timestamp = msg.date.timestamp();
+            bot.send_message(chat_id, format!("ПОСТОЯЛИ {}",get_time_difference(timestamp, end_timestamp))).await?;
+
             let total = get_total(total_manager.clone(), chat_id, timestamp, end_timestamp).await;
             send_and_update_total(&bot, chat_id, total, total_manager).await?;
 
         } else {
-            bot.send_message(chat_id, format!("СТОИМ {}",get_time_difference(timestamp))).await?;
+            bot.send_message(chat_id, format!("СТОИМ {}",get_time_difference_from_now(timestamp))).await?;
         }
     }
     Ok(())
@@ -65,10 +65,10 @@ pub async fn start_standing_handler(bot: Bot, dialogue: MyDialogue, msg: Message
         Some(sticker) => {
             if sticker.file.unique_id == STICKER_STAND {
                 let chat_id = msg.chat_id().unwrap();
-                dialogue.update(State::ReceiveStandingCommand { chat_id, timestamp: Utc::now().timestamp() }).await?;
+                let timestamp = msg.date.timestamp();
+                dialogue.update(State::ReceiveStandingCommand { chat_id, timestamp: timestamp }).await?;
                 let standing_msg = bot.send_message(chat_id, "СТОИМ БРАТЬЯ").await?;
                 bot.pin_chat_message(standing_msg.chat.id, standing_msg.id).await?;
-                let timestamp = msg.date.timestamp();
                 let _ = tx.send(UpdateData(Some(standing_msg), timestamp));
             }
         }
