@@ -1,6 +1,6 @@
 use std::{error::Error, sync::Arc};
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use teloxide::{
     dispatching::dialogue::GetChatId, prelude::*
 };
@@ -31,7 +31,8 @@ pub async fn standing_status_handler(bot: Bot,
             bot.unpin_chat_message(msg.chat_id().unwrap()).await?;
             bot.send_message(chat_id, format!("ПОСТОЯЛИ {}",get_time_difference(timestamp))).await?;
 
-            let total = get_total(total_manager.clone(), chat_id, timestamp).await;
+            let end_timestamp = msg.date.timestamp();
+            let total = get_total(total_manager.clone(), chat_id, timestamp, end_timestamp).await;
             send_and_update_total(&bot, chat_id, total, total_manager).await?;
 
         } else {
@@ -41,11 +42,14 @@ pub async fn standing_status_handler(bot: Bot,
     Ok(())
 }
 
-pub async fn get_total(total_manager: Arc<Total>,chat_id: ChatId,timestamp: i64) -> i64 {
-    let total = if let Ok(Some(existing_total)) = total_manager.clone().get_total_timestamp_day(timestamp,chat_id).await {
-        existing_total + get_seconds_difference_from_now(timestamp)
+pub async fn get_total(total_manager: Arc<Total>, chat_id: ChatId, start_timestamp: i64, end_timestamp: i64) -> i64 {
+    let end_datetime = DateTime::from_timestamp(end_timestamp, 0).unwrap_or(Utc::now());
+    let seconds_diff = get_seconds_difference(start_timestamp, end_datetime);
+
+    let total = if let Ok(Some(existing_total)) = total_manager.clone().get_total_timestamp_day(start_timestamp, chat_id).await {
+        existing_total + seconds_diff
     } else {
-         get_seconds_difference_from_now(timestamp)
+        seconds_diff
     };
     return total;
 }
@@ -64,7 +68,7 @@ pub async fn start_standing_handler(bot: Bot, dialogue: MyDialogue, msg: Message
                 dialogue.update(State::ReceiveStandingCommand { chat_id, timestamp: Utc::now().timestamp() }).await?;
                 let standing_msg = bot.send_message(chat_id, "СТОИМ БРАТЬЯ").await?;
                 bot.pin_chat_message(standing_msg.chat.id, standing_msg.id).await?;
-                let timestamp = Utc::now().timestamp();
+                let timestamp = msg.date.timestamp();
                 let _ = tx.send(UpdateData(Some(standing_msg), timestamp));
             }
         }

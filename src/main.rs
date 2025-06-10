@@ -56,8 +56,26 @@ enum Command {
     Cancel(String),
     /// РАНКИНГ
     Rankings,
+    /// РАНКИНГ ПО МЕСЯЦАМ
+    #[command(alias = "avgmonth")]
+    RankingsMonth,
+    /// РАНКИНГ ПО НЕДЕЛЯМ
+    #[command(alias = "avgweek")]
+    RankingsWeek,
+    /// РАНКИНГ ПО ГОДАМ
+    #[command(alias = "avgyear")]
+    RankingsYear,
     /// ОБЩЕЕ ВРЕМЯ
-    Total
+    Total,
+    /// ОБЩЕЕ ВРЕМЯ ЗА МЕСЯЦ
+    #[command(alias = "month")]
+    TotalMonth,
+    /// ОБЩЕЕ ВРЕМЯ ЗА НЕДЕЛЮ
+    #[command(alias = "week")]
+    TotalWeek,
+    /// ОБЩЕЕ ВРЕМЯ ЗА ГОД
+    #[command(alias = "year")]
+    TotalYear
 }
 
 #[tokio::main]
@@ -105,9 +123,15 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
     let command_handler = teloxide::filter_command::<Command, _>()
         .branch(case![Command::Help].endpoint(help))
         .branch(case![Command::Rankings].endpoint(rankings))
+        .branch(case![Command::RankingsMonth].endpoint(rankings_month))
+        .branch(case![Command::RankingsWeek].endpoint(rankings_week))
+        .branch(case![Command::RankingsYear].endpoint(rankings_year))
         .branch(case![Command::Start].endpoint(start))
         .branch(case![Command::Cancel(time)].endpoint(cancel))
-        .branch(case![Command::Total].endpoint(total));
+        .branch(case![Command::Total].endpoint(total))
+        .branch(case![Command::TotalMonth].endpoint(total_month))
+        .branch(case![Command::TotalWeek].endpoint(total_week))
+        .branch(case![Command::TotalYear].endpoint(total_year));
 
     let message_handler = Update::filter_message()
         .inspect(|u: Update| {
@@ -140,7 +164,6 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
         .branch(channel_handler)
         .branch(message_handler)
 }
-
 
 async fn rankings(bot: Bot, msg: Message, total_manager: Arc<Total>) -> HandlerResult {
     let averages = total_manager.get_average_total_per_day_by_chat().await?;
@@ -177,6 +200,111 @@ async fn rankings(bot: Bot, msg: Message, total_manager: Arc<Total>) -> HandlerR
     Ok(())
 }
 
+async fn rankings_month(bot: Bot, msg: Message, total_manager: Arc<Total>) -> HandlerResult {
+    let averages = total_manager.get_average_total_per_month_by_chat().await?;
+    let mut messages = Vec::new();
+
+    let mut winning_chat: Option<(i64, i64)> = None;
+
+    for (chat_id, average) in averages.iter() {
+        let chat = bot.get_chat(ChatId(*chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        let average_seconds = average.unwrap_or(0) as i64;
+        messages.push(format!("Чат: {}, Среднее стояние в месяце: \n<b>{}</b>", chat_name, time::total_seconds_to_hms(average_seconds)));
+
+        if let Some((_, current_winning_average)) = winning_chat {
+            if average_seconds > current_winning_average {
+                winning_chat = Some((*chat_id, average_seconds));
+            }
+        } else {
+            winning_chat = Some((*chat_id, average_seconds));
+        }
+    }
+
+    if let Some((chat_id, average)) = winning_chat {
+        let chat = bot.get_chat(ChatId(chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        messages.push(format!("
+🏆 <b>Победитель месяца:</b> {} со средним стоянием: <b>{}</b> 🏆", chat_name, time::total_seconds_to_hms(average)));
+    }
+
+    bot.send_message(msg.chat.id, messages.join("\n"))
+       .parse_mode(teloxide::types::ParseMode::Html)
+       .await?;
+
+    Ok(())
+}
+
+async fn rankings_week(bot: Bot, msg: Message, total_manager: Arc<Total>) -> HandlerResult {
+    let averages = total_manager.get_average_total_per_week_by_chat().await?;
+    let mut messages = Vec::new();
+
+    let mut winning_chat: Option<(i64, i64)> = None;
+
+    for (chat_id, average) in averages.iter() {
+        let chat = bot.get_chat(ChatId(*chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        let average_seconds = average.unwrap_or(0) as i64;
+        messages.push(format!("Чат: {}, Среднее стояние в неделе: \n<b>{}</b>", chat_name, time::total_seconds_to_hms(average_seconds)));
+
+        if let Some((_, current_winning_average)) = winning_chat {
+            if average_seconds > current_winning_average {
+                winning_chat = Some((*chat_id, average_seconds));
+            }
+        } else {
+            winning_chat = Some((*chat_id, average_seconds));
+        }
+    }
+
+    if let Some((chat_id, average)) = winning_chat {
+        let chat = bot.get_chat(ChatId(chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        messages.push(format!("
+🏆 <b>Победитель недели:</b> {} со средним стоянием: <b>{}</b> 🏆", chat_name, time::total_seconds_to_hms(average)));
+    }
+
+    bot.send_message(msg.chat.id, messages.join("\n"))
+       .parse_mode(teloxide::types::ParseMode::Html)
+       .await?;
+
+    Ok(())
+}
+
+async fn rankings_year(bot: Bot, msg: Message, total_manager: Arc<Total>) -> HandlerResult {
+    let averages = total_manager.get_average_total_per_year_by_chat().await?;
+    let mut messages = Vec::new();
+
+    let mut winning_chat: Option<(i64, i64)> = None;
+
+    for (chat_id, average) in averages.iter() {
+        let chat = bot.get_chat(ChatId(*chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        let average_seconds = average.unwrap_or(0) as i64;
+        messages.push(format!("Чат: {}, Среднее стояние в году: \n<b>{}</b>", chat_name, time::total_seconds_to_hms(average_seconds)));
+
+        if let Some((_, current_winning_average)) = winning_chat {
+            if average_seconds > current_winning_average {
+                winning_chat = Some((*chat_id, average_seconds));
+            }
+        } else {
+            winning_chat = Some((*chat_id, average_seconds));
+        }
+    }
+
+    if let Some((chat_id, average)) = winning_chat {
+        let chat = bot.get_chat(ChatId(chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        messages.push(format!("
+🏆 <b>Победитель года:</b> {} со средним стоянием: <b>{}</b> 🏆", chat_name, time::total_seconds_to_hms(average)));
+    }
+
+    bot.send_message(msg.chat.id, messages.join("\n"))
+       .parse_mode(teloxide::types::ParseMode::Html)
+       .await?;
+
+    Ok(())
+}
+
 async fn total(bot: Bot, msg: Message, total_manager: Arc<Total>) -> HandlerResult {
     let totals = total_manager.get_total_seconds_grouped_by_chat().await?;
     let mut messages = Vec::new();
@@ -203,6 +331,111 @@ async fn total(bot: Bot, msg: Message, total_manager: Arc<Total>) -> HandlerResu
         let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
         messages.push(format!("
 🏆 <b>Победитель:</b> {} с общим стоянием: <b>{}</b> 🏆", chat_name, time::total_seconds_to_hms(total)));
+    }
+
+    bot.send_message(msg.chat.id, messages.join("\n"))
+       .parse_mode(teloxide::types::ParseMode::Html)
+       .await?;
+
+    Ok(())
+}
+
+async fn total_month(bot: Bot, msg: Message, total_manager: Arc<Total>) -> HandlerResult {
+    let totals = total_manager.get_total_seconds_grouped_by_month().await?;
+    let mut messages = Vec::new();
+
+    let mut winning_chat: Option<(i64, i64)> = None;
+
+    for (chat_id, total) in totals.iter() {
+        let chat = bot.get_chat(ChatId(*chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        let total_seconds = total.unwrap_or(0) as i64;
+        messages.push(format!("Чат: {}, Всего постояли в этом месяце: \n<b>{}</b>", chat_name, time::total_seconds_to_hms(total_seconds)));
+
+        if let Some((_, current_winning_total)) = winning_chat {
+            if total_seconds > current_winning_total {
+                winning_chat = Some((*chat_id, total_seconds));
+            }
+        } else {
+            winning_chat = Some((*chat_id, total_seconds));
+        }
+    }
+
+    if let Some((chat_id, total)) = winning_chat {
+        let chat = bot.get_chat(ChatId(chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        messages.push(format!("
+🏆 <b>Победитель месяца:</b> {} с общим стоянием: <b>{}</b> 🏆", chat_name, time::total_seconds_to_hms(total)));
+    }
+
+    bot.send_message(msg.chat.id, messages.join("\n"))
+       .parse_mode(teloxide::types::ParseMode::Html)
+       .await?;
+
+    Ok(())
+}
+
+async fn total_week(bot: Bot, msg: Message, total_manager: Arc<Total>) -> HandlerResult {
+    let totals = total_manager.get_total_seconds_grouped_by_week().await?;
+    let mut messages = Vec::new();
+
+    let mut winning_chat: Option<(i64, i64)> = None;
+
+    for (chat_id, total) in totals.iter() {
+        let chat = bot.get_chat(ChatId(*chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        let total_seconds = total.unwrap_or(0) as i64;
+        messages.push(format!("Чат: {}, Всего постояли на этой неделе: \n<b>{}</b>", chat_name, time::total_seconds_to_hms(total_seconds)));
+
+        if let Some((_, current_winning_total)) = winning_chat {
+            if total_seconds > current_winning_total {
+                winning_chat = Some((*chat_id, total_seconds));
+            }
+        } else {
+            winning_chat = Some((*chat_id, total_seconds));
+        }
+    }
+
+    if let Some((chat_id, total)) = winning_chat {
+        let chat = bot.get_chat(ChatId(chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        messages.push(format!("
+🏆 <b>Победитель недели:</b> {} с общим стоянием: <b>{}</b> 🏆", chat_name, time::total_seconds_to_hms(total)));
+    }
+
+    bot.send_message(msg.chat.id, messages.join("\n"))
+       .parse_mode(teloxide::types::ParseMode::Html)
+       .await?;
+
+    Ok(())
+}
+
+async fn total_year(bot: Bot, msg: Message, total_manager: Arc<Total>) -> HandlerResult {
+    let totals = total_manager.get_total_seconds_grouped_by_year().await?;
+    let mut messages = Vec::new();
+
+    let mut winning_chat: Option<(i64, i64)> = None;
+
+    for (chat_id, total) in totals.iter() {
+        let chat = bot.get_chat(ChatId(*chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        let total_seconds = total.unwrap_or(0) as i64;
+        messages.push(format!("Чат: {}, Всего постояли в этом году: \n<b>{}</b>", chat_name, time::total_seconds_to_hms(total_seconds)));
+
+        if let Some((_, current_winning_total)) = winning_chat {
+            if total_seconds > current_winning_total {
+                winning_chat = Some((*chat_id, total_seconds));
+            }
+        } else {
+            winning_chat = Some((*chat_id, total_seconds));
+        }
+    }
+
+    if let Some((chat_id, total)) = winning_chat {
+        let chat = bot.get_chat(ChatId(chat_id)).await?;
+        let chat_name = chat.title().unwrap_or_else(|| chat.username().unwrap_or("Нет имени"));
+        messages.push(format!("
+🏆 <b>Победитель года:</b> {} с общим стоянием: <b>{}</b> 🏆", chat_name, time::total_seconds_to_hms(total)));
     }
 
     bot.send_message(msg.chat.id, messages.join("\n"))
@@ -289,18 +522,5 @@ mod tests {
         let storage: MyStorage = InMemStorage::new().erase();
         bot.dependencies(deps![storage]);
         bot.dispatch_and_check_last_text_and_state("Скинь чат бро",State::Start).await;
-        // bot.update(MockMessageText::new().text("kekes"));
-        // bot.dispatch_and_check_last_text_and_state("Your tasks: kekes",State::AskForText).await;
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn test_stand_brothers() {
-        // let bot = MockBot::new(MockMessageText::new().text("/start"), schema());
-        // let storage: MyStorage = InMemStorage::new().erase();
-        // bot.dependencies(deps![storage]);
-        // bot.dispatch_and_check_last_text_and_state("Скинь чат бро",State::Start).await;
-        // bot.update(MockMessageText::new().text("kekes"));
-        // bot.dispatch_and_check_last_text_and_state("Your tasks: kekes",State::AskForText).await;
     }
 }
